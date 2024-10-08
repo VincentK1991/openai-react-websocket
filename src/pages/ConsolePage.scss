@@ -138,10 +138,10 @@
         flex-shrink: 0;
         width: 100%;
         overflow: hidden;
-        height: 200px;
+        height: 800px;
         min-height: 0;
-        max-height: 200px;
-        border-top: 1px solid #e7e7e7;
+        max-height: 800px;
+        border-top: 1px solid #d3f346; //e7e7e7
       }
     }
   }
@@ -277,4 +277,33 @@
       }
     }
   }
+  .content-actions {
+    // Ensure the content-actions container adjusts to accommodate the new form
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: flex-start;
+
+    .text-input-form {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 8px;
+
+      input[type='text'] {
+        flex-grow: 1;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+      }
+
+      button {
+        flex-shrink: 0;
+      }
+    }
+  }
+
 }
+

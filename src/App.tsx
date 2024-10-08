@@ -1,4 +1,5 @@
-import { ConsolePage } from './pages/ConsolePage';
+//import { ConsolePage } from './pages/ConsolePage';
+import { ConsolePage } from './pages/AnotherConsolePage';
 import './App.scss';
 
 function App() {
