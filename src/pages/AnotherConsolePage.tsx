@@ -22,6 +22,8 @@ import { WavRenderer } from '../utils/wav_renderer';
 import { X, Edit, Zap, ArrowUp, ArrowDown } from 'react-feather';
 import { Button } from '../components/button/Button';
 import { Toggle } from '../components/toggle/Toggle';
+import axios from 'axios';
+import { extractTextFromArxivPDF, PdfExtractorToolDefinition } from '../Tools/arxivPdfExtractor';
 
 import './ConsolePage.scss';
 import { isJsxOpeningLikeElement } from 'typescript';
@@ -101,6 +103,12 @@ export function ConsolePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [memoryKv, setMemoryKv] = useState<{ [key: string]: any }>({});
   const [inputText, setInputText] = useState('');
+  const [outputMode, setOutputMode] = useState<'conversation' | 'text'>('text');
+  // the default output mode is text because the conversation mode is expensive
+  // Note here that outputMode is set to 'conversation' by default
+  // to make the outputMode take effect, 
+  //we will have to disconnect the conversation and reconnect
+
 
   /**
    * Utility for formatting the timing of logs
@@ -159,6 +167,14 @@ export function ConsolePage() {
     const wavRecorder = wavRecorderRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
 
+    // Set modalities before connecting
+    const modalities = outputMode === 'text' ? ['text'] : ['text', 'audio'];
+    await client.updateSession({ modalities });
+    // Set other session parameters before connecting
+    await client.updateSession({ instructions: instructions });
+    await client.updateSession({
+      input_audio_transcription: { model: 'whisper-1' },
+    });
     // Set state variables
     startTimeRef.current = new Date().toISOString();
     setIsConnected(true);
@@ -183,7 +199,7 @@ export function ConsolePage() {
     if (client.getTurnDetectionType() === 'server_vad') {
       await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
-  }, []);
+  }, [outputMode]);
 
   /**
    * Disconnect and reset conversation state
@@ -269,6 +285,30 @@ export function ConsolePage() {
       }
     }
   }, [realtimeEvents]);
+
+  /**
+   * listen to outputMode and update session
+   */
+  // useEffect(() => {
+  // const client = clientRef.current;
+  // if (client.isConnected()) {
+  //   const modalities = outputMode === 'text' ? ['text'] : ['text', 'audio'];
+  //     client.updateSession({ modalities });
+  //   }
+  // }, [outputMode]);
+  /**
+   * 
+   * a function to handle the output mode change
+   */
+  const handleOutputModeChange = async (value: 'text' | 'conversation') => {
+    if (isConnected) {
+      await disconnectConversation();
+      setOutputMode(value);
+      await connectConversation();
+    } else {
+      setOutputMode(value);
+    }
+  };
 
   /**
    * Auto-scroll the conversation logs
@@ -397,6 +437,13 @@ export function ConsolePage() {
         return { ok: true };
       }
     );
+    client.addTool(
+      PdfExtractorToolDefinition,
+      async ({ arxivUrl }: { [key: string]: any }) => {
+        const text = await extractTextFromArxivPDF(arxivUrl);
+        return { ok: true, text };
+      }
+    );
 
     // Handle realtime events from client + server for event logging
     client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
@@ -431,6 +478,21 @@ export function ConsolePage() {
           24000
         );
         item.formatted.file = wavFile;
+      }
+      if (delta?.function_output) {
+        const functionOutputItem: any = {
+          id: `function-output-${item.id}`,
+          type: 'function_output',
+          role: 'assistant',
+          formatted: {
+            text: delta.function_output.text,
+            function: {
+              name: delta.function_output.name,
+              output: delta.function_output.arguments,
+            },
+          },
+        };
+        items.push(functionOutputItem);
       }
       setItems(items);
     });
@@ -593,7 +655,7 @@ export function ConsolePage() {
                               '(truncated)'}
                           </div>
                         )}
-                      {conversationItem.formatted.file && (
+                      {conversationItem.formatted.file && outputMode === 'conversation' && (
                         <audio
                           src={conversationItem.formatted.file.url}
                           controls
@@ -606,6 +668,14 @@ export function ConsolePage() {
             </div>
           </div>
           <div className="content-actions">
+            <Toggle
+              defaultValue={false}
+              labels={['text', 'conversation']}
+              values={['text', 'conversation']}
+              onChange={(_, value) =>
+                handleOutputModeChange(value as 'text' | 'conversation')
+              }
+            />
             <Toggle
               defaultValue={false}
               labels={['manual', 'voice activity detection']}
@@ -631,21 +701,21 @@ export function ConsolePage() {
               onClick={
                 isConnected ? disconnectConversation : connectConversation
               }
-              />
+            />
             <form onSubmit={handleTextSubmit} className="text-input-form">
-                <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Type your message here..."
-                    disabled={!isConnected}
-                />
-                <Button
-                    label="Send"
-                    buttonStyle="action"
-                    type="submit"
-                    disabled={!isConnected || inputText.trim() === ''}
-                />
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Type your message here..."
+                disabled={!isConnected}
+              />
+              <Button
+                label="Send"
+                buttonStyle="action"
+                type="submit"
+                disabled={!isConnected || inputText.trim() === ''}
+              />
             </form>
           </div>
         </div>
