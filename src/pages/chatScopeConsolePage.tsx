@@ -1,12 +1,28 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Edit, Zap, ArrowUp, ArrowDown } from 'react-feather';
-import { Button } from '../components/button/customButton';
-import { Toggle } from '../components/toggle/customToggle';
-import { WavRenderer } from '../utils/wav_renderer';
-import { useRealtimeClient } from '../hooks/useRealtimeClient';
-import './ConsolePage.scss';
+import { Button } from 'src/components/button/Button';
+import { Label } from 'src/components/label/Label';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from 'src/components/tabs/Tabs';
+import { Switch } from 'src/components/switch/Switch';
+import {
+  ChatContainer,
+  MessageList,
+  Message,
+  MessageInput,
+  Avatar,
+} from '@chatscope/chat-ui-kit-react';
 
-export function ConsolePage() {
+import { ArrowUp, ArrowDown } from 'react-feather';
+import { WavRenderer } from '../utils/wav_renderer';
+
+import { useRealtimeClient } from 'src/hooks/useRealtimeClient';
+import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
+
+export function ChatScopeConsolePage() {
   const {
     connection,
     conversation,
@@ -131,25 +147,95 @@ export function ConsolePage() {
     <div data-component="ConsolePage">
       <div className="content-top">
         <div className="content-title">
-          <img src="/openai-logomark.svg" />
-          <span>realtime console</span>
+          <img src="/openai-logomark.svg" alt="Logo" width="24" height="24" />
+          <span>Realtime Console</span>
         </div>
         <div className="content-api-key">
           {!process.env.REACT_APP_LOCAL_RELAY_SERVER_URL && (
-            <Button
-              icon={Edit}
-              iconPosition="end"
-              buttonStyle="flush"
-              label={`api key: ${apiKey.slice(0, 3)}...`}
-              onClick={resetAPIKey}
-            />
+            <Button onClick={resetAPIKey}>
+              API Key: {apiKey.slice(0, 3)}...
+            </Button>
           )}
         </div>
       </div>
       <div className="content-main">
-        <div className="content-logs">
-          {/* Events section */}
-          <div className="content-block events">
+        <Tabs defaultValue="conversation" className="space-y-2">
+          <TabsList className="bg-gray-100 rounded-md p-2">
+            <TabsTrigger value="conversation" 
+            className="chat-tab">
+              Conversation
+            </TabsTrigger>
+            <TabsTrigger value="events" 
+            className="chat-tab">
+              Events
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="conversation">
+            {/* Conversation UI */}
+            <ChatContainer>
+              <MessageList>
+                {conversation.items.map((conversationItem) => {
+                  const isUser = conversationItem.role === 'user';
+                  const messageType = conversationItem.type;
+                  const avatarSrc = isUser
+                    ? '/user-avatar.png'
+                    : '/assistant-avatar.png';
+
+                  // Color-code messages based on type
+                  let backgroundColor = '#FFFFFF'; // Default color
+                  if (messageType === 'function_call') {
+                    backgroundColor = '#E0F7FA'; // Light cyan for function calls
+                  } else if (messageType === 'function_call_output') {
+                    backgroundColor = '#FFF3E0'; // Light orange for function outputs
+                  } else if (isUser) {
+                    backgroundColor = '#DCF8C6'; // Light green for user messages
+                  }
+
+                  return (
+                    <Message
+                      key={conversationItem.id}
+                      model={{
+                        message:
+                          conversationItem.formatted.text ||
+                          conversationItem.formatted.transcript ||
+                          '(No content)',
+                        //sentTime: utils.formatTime(new Date()),
+                        sender: isUser ? 'User' : 'Assistant',
+                        direction: isUser ? 'outgoing' : 'incoming',
+                        position: 'normal',
+                      }}
+                      style={{ backgroundColor }}
+                    >
+                      <Avatar
+                        src={avatarSrc}
+                        name={isUser ? 'User' : 'Assistant'}
+                      />
+                    </Message>
+                  );
+                })}
+              </MessageList>
+              <MessageInput
+                placeholder="Type your message here..."
+                value={textInput.value}
+                onChange={(val) => textInput.setValue(val)}
+                onSend={(message) => {
+                  textInput.setValue(message);
+                  // Create a synthetic event
+                  const syntheticEvent = {
+                    preventDefault: () => {},
+                    target: { value: message },
+                  } as unknown as React.FormEvent<HTMLFormElement>;
+                  textInput.handleSubmit(syntheticEvent);
+                }}
+                disabled={!connection.isConnected}
+                attachButton={false}
+              />
+            </ChatContainer>
+          </TabsContent>
+
+          <TabsContent value="events">
+            {/* Events Visualization */}
             <div className="visualization">
               <div className="visualization-entry client">
                 <canvas ref={clientCanvasRef} />
@@ -158,9 +244,10 @@ export function ConsolePage() {
                 <canvas ref={serverCanvasRef} />
               </div>
             </div>
-            <div className="content-block-title">events</div>
-            <div className="content-block-body" ref={eventsScrollRef}>
-              {!conversation.realtimeEvents.length && `awaiting connection...`}
+
+            {/* Events List */}
+            <div className="events-list" ref={eventsScrollRef}>
+              {!conversation.realtimeEvents.length && `Awaiting connection...`}
               {conversation.realtimeEvents.map((realtimeEvent, i) => {
                 const count = realtimeEvent.count;
                 const event = { ...realtimeEvent.event };
@@ -180,13 +267,10 @@ export function ConsolePage() {
                         onClick={() => {
                           // Toggle event details
                           const id = event.event_id;
-                          const expanded = { ...expandedEvents };
-                          if (expanded[id]) {
-                            delete expanded[id];
-                          } else {
-                            expanded[id] = true;
-                          }
-                          setExpandedEvents(expanded);
+                          setExpandedEvents((prev) => ({
+                            ...prev,
+                            [id]: !prev[id],
+                          }));
                         }}
                       >
                         <div
@@ -222,140 +306,62 @@ export function ConsolePage() {
                 );
               })}
             </div>
-          </div>
+          </TabsContent>
+        </Tabs>
 
-          {/* Conversation section */}
-          <div className="content-block conversation">
-            <div className="content-block-title">conversation</div>
-            <div className="content-block-body" data-conversation-content>
-              {!conversation.items.length && `awaiting connection...`}
-              {conversation.items.map((conversationItem, i) => {
-                return (
-                  <div className="conversation-item" key={conversationItem.id}>
-                    <div className={`speaker ${conversationItem.role || ''}`}>
-                      <div>
-                        {(
-                          conversationItem.role || conversationItem.type
-                        ).replaceAll('_', ' ')}
-                      </div>
-                      <div
-                        className="close"
-                        onClick={() =>
-                          conversation.deleteItem(conversationItem.id)
-                        }
-                      >
-                        <X />
-                      </div>
-                    </div>
-                    <div className={`speaker-content`}>
-                      {/* Tool response */}
-                      {conversationItem.type === 'function_call_output' && (
-                        <div>{conversationItem.formatted.output}</div>
-                      )}
-                      {/* Tool call */}
-                      {!!conversationItem.formatted.tool && (
-                        <div>
-                          {conversationItem.formatted.tool.name}(
-                          {conversationItem.formatted.tool.arguments})
-                        </div>
-                      )}
-                      {!conversationItem.formatted.tool &&
-                        conversationItem.role === 'user' && (
-                          <div>
-                            {conversationItem.formatted.transcript ||
-                              (conversationItem.formatted.audio?.length
-                                ? '(awaiting transcript)'
-                                : conversationItem.formatted.text ||
-                                  '(item sent)')}
-                          </div>
-                        )}
-                      {!conversationItem.formatted.tool &&
-                        conversationItem.role === 'assistant' && (
-                          <div>
-                            {conversationItem.formatted.transcript ||
-                              conversationItem.formatted.text ||
-                              '(truncated)'}
-                          </div>
-                        )}
-                      {conversationItem.formatted.file &&
-                        output.mode === 'conversation' && (
-                          <audio
-                            src={conversationItem.formatted.file.url}
-                            controls
-                          />
-                        )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        {/* Actions Section */}
+        <div className="content-actions">
+          <Switch
+            id="conversation-mode"
+            checked={output.mode === 'conversation'}
+            onCheckedChange={(checked) =>
+              output.setMode(checked ? 'conversation' : 'text')
+            }
+            className="chat-switch w-160 h-80"
+          >
+            <span className="text-xs text-white">{output.mode === 'conversation' ? 'Conversation' : 'Text'}</span>
+          </Switch>
+          {/* <Label htmlFor="conversation-mode">Conversation Mode</Label> */}
 
-          {/* Actions section */}
-          <div className="content-actions">
-            <Toggle
-              defaultValue={false}
-              labels={['text', 'conversation']}
-              values={['text', 'conversation']}
-              onChange={(_, value) =>
-                output.setMode(value as 'text' | 'conversation')
-              }
-            />
-            <Toggle
-              defaultValue={false}
-              labels={['manual', 'voice activity detection']}
-              values={['none', 'server_vad']}
-              onChange={(_, value) => audio.changeTurnEndType(value)}
-            />
-            <div className="spacer" />
-            {connection.isConnected && audio.canPushToTalk && (
-              <Button
-                label={audio.isRecording ? 'release to send' : 'push to talk'}
-                buttonStyle={audio.isRecording ? 'alert' : 'regular'}
-                disabled={!connection.isConnected || !audio.canPushToTalk}
-                onMouseDown={audio.startRecording}
-                onMouseUp={audio.stopRecording}
-              />
-            )}
-            <div className="spacer" />
-            <Button
-              label={connection.isConnected ? 'disconnect' : 'connect'}
-              iconPosition={connection.isConnected ? 'end' : 'start'}
-              icon={connection.isConnected ? X : Zap}
-              buttonStyle={connection.isConnected ? 'regular' : 'action'}
-              onClick={
-                connection.isConnected
-                  ? connection.disconnect
-                  : connection.connect
-              }
-            />
-            <form onSubmit={textInput.handleSubmit} className="text-input-form">
-              <input
-                type="text"
-                value={textInput.value}
-                onChange={(e) => textInput.setValue(e.target.value)}
-                placeholder="Type your message here..."
-                disabled={!connection.isConnected}
-              />
-              <Button
-                label="Send"
-                buttonStyle="action"
-                type="submit"
-                disabled={
-                  !connection.isConnected || textInput.value.trim() === ''
-                }
-              />
-            </form>
-          </div>
+          <Switch
+            id="push-to-talk"
+            checked={audio.canPushToTalk}
+            onCheckedChange={(checked) =>
+              audio.changeTurnEndType(checked ? 'none' : 'server_vad')
+            }
+            className="chat-switch w-16 h-8"
+          >
+            <span className="text-xs text-white">
+              {audio.canPushToTalk ? 'Manual' : 'Voice Activity Detection'}
+            </span>
+          </Switch>
+          {/* <Label htmlFor="push-to-talk">Push to Talk</Label> */}
+          <Button
+            onMouseDown={audio.startRecording}
+            onMouseUp={audio.stopRecording}
+            disabled={!connection.isConnected || !audio.canPushToTalk}
+          >
+            {audio.isRecording ? 'Release to Send' : 'Push to Talk'}
+          </Button>
+
+          <Button
+            onClick={
+              connection.isConnected
+                ? connection.disconnect
+                : connection.connect
+            }
+          >
+            {connection.isConnected ? 'Disconnect' : 'Connect'}
+          </Button>
         </div>
+      </div>
 
-        {/* Memory Key-Value section */}
-        <div className="content-right">
-          <div className="content-block kv">
-            <div className="content-block-title">set_memory()</div>
-            <div className="content-block-body content-kv">
-              {JSON.stringify(conversation.memoryKv, null, 2)}
-            </div>
+      {/* Memory Key-Value Section */}
+      <div className="content-right">
+        <div className="content-block kv">
+          <div className="content-block-title">set_memory()</div>
+          <div className="content-block-body content-kv">
+            {JSON.stringify(conversation.memoryKv, null, 2)}
           </div>
         </div>
       </div>
