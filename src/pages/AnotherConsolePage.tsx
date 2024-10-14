@@ -23,7 +23,12 @@ import { X, Edit, Zap, ArrowUp, ArrowDown } from 'react-feather';
 import { Button } from '../components/button/Button';
 import { Toggle } from '../components/toggle/Toggle';
 import axios from 'axios';
-import { extractTextFromArxivPDF, PdfExtractorToolDefinition } from '../Tools/arxivPdfExtractor';
+import { extractTextToNeo4j, ExtractorToNeo4jToolDefinition } from '../Tools/extractorToNeo4j';
+import { resolveKeyConcepts, KeyConceptResolutionToolDefinition } from '../Tools/keyConceptResolution';
+import { getTextFromRelatedKeyConcept, TextFromRelatedKeyConceptsToolDefinition } from '../Tools/textFromRelatedKeyConcept';
+import { getTextFromKeyConcept, TextFromKeyConceptsToolDefinition } from '../Tools/textFromKeyConcept';
+import { getTextFromEmbedding, TextFromEmbeddingToolDefinition } from '../Tools/textFromEmbedding';
+import { getAdditionalTextFromChunks, AdditionalTextFromKeyConceptToolDefinition } from '../Tools/additionalTextFromChunks';
 
 import './ConsolePage.scss';
 import { isJsxOpeningLikeElement } from 'typescript';
@@ -438,12 +443,49 @@ export function ConsolePage() {
       }
     );
     client.addTool(
-      PdfExtractorToolDefinition,
+      ExtractorToNeo4jToolDefinition,
       async ({ arxivUrl }: { [key: string]: any }) => {
-        const text = await extractTextFromArxivPDF(arxivUrl);
+        const text = await extractTextToNeo4j(arxivUrl);
         return { ok: true, text };
       }
     );
+    // client.addTool(
+    //   KeyConceptResolutionToolDefinition,
+    //   async ({ }) => {
+    //     const text = await resolveKeyConcepts();
+    //     return { ok: true, text };
+    //   }
+    // );
+    client.addTool(
+      TextFromRelatedKeyConceptsToolDefinition,
+      async ({ keyConcept }: { [key: string]: any }) => {
+        const text = await getTextFromRelatedKeyConcept(keyConcept);
+        return { ok: true, text };
+      }
+    );
+    // client.addTool(
+    //   TextFromKeyConceptsToolDefinition,
+    //   async ({ keyConcepts }: { keyConcepts: string[] }) => {
+    //     const text = await getTextFromKeyConcept(keyConcepts);
+    //     return { ok: true, text };
+    //   }
+    // );
+    client.addTool(
+      TextFromEmbeddingToolDefinition,
+      async ({ query }: { [key: string]: any }) => {
+        const text = await getTextFromEmbedding(query);
+        return { ok: true, text };
+      }
+    );
+    client.addTool(
+      AdditionalTextFromKeyConceptToolDefinition,
+      async ({ keyConcept }: { [key: string]: any }) => {
+        const text = await getAdditionalTextFromChunks(keyConcept);
+        return { ok: true, text };
+      }
+    );
+
+    
 
     // Handle realtime events from client + server for event logging
     client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
