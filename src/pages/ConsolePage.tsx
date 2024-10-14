@@ -6,7 +6,10 @@
  * REACT_APP_LOCAL_RELAY_SERVER_URL=http://localhost:8081
  *
  * This will also require you to set OPENAI_API_KEY= in a `.env` file
+ * the .env should be in the root of the project (not in the src folder)
  * You can run it with `npm run relay`, in parallel with `npm start`
+ * 
+ * this way you can hide the API key and don't need to set dangerouslyAllowAPIKeyInBrowser: true
  */
 const LOCAL_RELAY_SERVER_URL: string =
   process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
@@ -14,35 +17,42 @@ const LOCAL_RELAY_SERVER_URL: string =
 import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { RealtimeClient } from '@openai/realtime-api-beta';
-import { ItemType } from '@openai/realtime-api-beta/dist/lib/client.js';
-import { WavRecorder, WavStreamPlayer } from '../lib/wavtools/index.js';
-import { instructions } from '../utils/conversation_config.js';
+import { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
+import { WavRecorder, WavStreamPlayer } from '../lib/wavtools/index';
+import { instructions } from '../utils/conversation_config';
 import { WavRenderer } from '../utils/wav_renderer';
 
 import { X, Edit, Zap, ArrowUp, ArrowDown } from 'react-feather';
 import { Button } from '../components/button/Button';
 import { Toggle } from '../components/toggle/Toggle';
-import { Map } from '../components/Map';
+import axios from 'axios';
+import {
+  extractTextToNeo4j,
+  ExtractorToNeo4jToolDefinition,
+} from '../Tools/extractorToNeo4j';
+import {
+  resolveKeyConcepts,
+  KeyConceptResolutionToolDefinition,
+} from '../Tools/keyConceptResolution';
+import {
+  getTextFromRelatedKeyConcept,
+  TextFromRelatedKeyConceptsToolDefinition,
+} from '../Tools/textFromRelatedKeyConcept';
+import {
+  getTextFromKeyConcept,
+  TextFromKeyConceptsToolDefinition,
+} from '../Tools/textFromKeyConcept';
+import {
+  getTextFromEmbedding,
+  TextFromEmbeddingToolDefinition,
+} from '../Tools/textFromEmbedding';
+import {
+  getAdditionalTextFromChunks,
+  AdditionalTextFromKeyConceptToolDefinition,
+} from '../Tools/additionalTextFromChunks';
 
 import './ConsolePage.scss';
 import { isJsxOpeningLikeElement } from 'typescript';
-
-/**
- * Type for result from get_weather() function call
- */
-interface Coordinates {
-  lat: number;
-  lng: number;
-  location?: string;
-  temperature?: {
-    value: number;
-    units: string;
-  };
-  wind_speed?: {
-    value: number;
-    units: string;
-  };
-}
 
 /**
  * Type for all event logs
@@ -59,6 +69,7 @@ export function ConsolePage() {
    * Ask user for API Key
    * If we're using the local relay server, we don't need this
    */
+  console.log('LOCAL_RELAY_SERVER_URL: ', LOCAL_RELAY_SERVER_URL);
   const apiKey = LOCAL_RELAY_SERVER_URL
     ? ''
     : localStorage.getItem('tmp::voice_api_key') ||
@@ -86,7 +97,7 @@ export function ConsolePage() {
         ? { url: LOCAL_RELAY_SERVER_URL }
         : {
             apiKey: apiKey,
-            dangerouslyAllowAPIKeyInBrowser: true,
+            //dangerouslyAllowAPIKeyInBrowser: true,
           }
     )
   );
@@ -108,7 +119,6 @@ export function ConsolePage() {
    * - items are all conversation items (dialog)
    * - realtimeEvents are event logs, which can be expanded
    * - memoryKv is for set_memory() function
-   * - coords, marker are for get_weather() function
    */
   const [items, setItems] = useState<ItemType[]>([]);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
@@ -119,11 +129,12 @@ export function ConsolePage() {
   const [canPushToTalk, setCanPushToTalk] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [memoryKv, setMemoryKv] = useState<{ [key: string]: any }>({});
-  const [coords, setCoords] = useState<Coordinates | null>({
-    lat: 37.775593,
-    lng: -122.418137,
-  });
-  const [marker, setMarker] = useState<Coordinates | null>(null);
+  const [inputText, setInputText] = useState('');
+  const [outputMode, setOutputMode] = useState<'conversation' | 'text'>('text');
+  // the default output mode is text because the conversation mode is expensive
+  // Note here that outputMode is set to 'conversation' by default
+  // to make the outputMode take effect,
+  //we will have to disconnect the conversation and reconnect
 
   /**
    * Utility for formatting the timing of logs
@@ -146,6 +157,21 @@ export function ConsolePage() {
     return `${pad(m)}:${pad(s)}.${pad(hs)}`;
   }, []);
 
+  const handleTextSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const client = clientRef.current;
+    if (inputText.trim() !== '') {
+      // Send the text input to the conversation
+      client.sendUserMessageContent([
+        {
+          type: 'input_text',
+          text: inputText.trim(),
+        },
+      ]);
+      setInputText('');
+    }
+  };
+
   /**
    * When you click the API key
    */
@@ -167,6 +193,14 @@ export function ConsolePage() {
     const wavRecorder = wavRecorderRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
 
+    // Set modalities before connecting
+    const modalities = outputMode === 'text' ? ['text'] : ['text', 'audio'];
+    await client.updateSession({ modalities });
+    // Set other session parameters before connecting
+    await client.updateSession({ instructions: instructions });
+    await client.updateSession({
+      input_audio_transcription: { model: 'whisper-1' },
+    });
     // Set state variables
     startTimeRef.current = new Date().toISOString();
     setIsConnected(true);
@@ -185,14 +219,13 @@ export function ConsolePage() {
       {
         type: `input_text`,
         text: `Hello!`,
-        // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
       },
     ]);
 
     if (client.getTurnDetectionType() === 'server_vad') {
       await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
-  }, []);
+  }, [outputMode]);
 
   /**
    * Disconnect and reset conversation state
@@ -202,11 +235,6 @@ export function ConsolePage() {
     setRealtimeEvents([]);
     setItems([]);
     setMemoryKv({});
-    setCoords({
-      lat: 37.775593,
-      lng: -122.418137,
-    });
-    setMarker(null);
 
     const client = clientRef.current;
     client.disconnect();
@@ -283,6 +311,30 @@ export function ConsolePage() {
       }
     }
   }, [realtimeEvents]);
+
+  /**
+   * listen to outputMode and update session
+   */
+  // useEffect(() => {
+  // const client = clientRef.current;
+  // if (client.isConnected()) {
+  //   const modalities = outputMode === 'text' ? ['text'] : ['text', 'audio'];
+  //     client.updateSession({ modalities });
+  //   }
+  // }, [outputMode]);
+  /**
+   *
+   * a function to handle the output mode change
+   */
+  const handleOutputModeChange = async (value: 'text' | 'conversation') => {
+    if (isConnected) {
+      await disconnectConversation();
+      setOutputMode(value);
+      await connectConversation();
+    } else {
+      setOutputMode(value);
+    }
+  };
 
   /**
    * Auto-scroll the conversation logs
@@ -412,55 +464,54 @@ export function ConsolePage() {
       }
     );
     client.addTool(
-      {
-        name: 'get_weather',
-        description:
-          'Retrieves the weather for a given lat, lng coordinate pair. Specify a label for the location.',
-        parameters: {
-          type: 'object',
-          properties: {
-            lat: {
-              type: 'number',
-              description: 'Latitude',
-            },
-            lng: {
-              type: 'number',
-              description: 'Longitude',
-            },
-            location: {
-              type: 'string',
-              description: 'Name of the location',
-            },
-          },
-          required: ['lat', 'lng', 'location'],
-        },
-      },
-      async ({ lat, lng, location }: { [key: string]: any }) => {
-        setMarker({ lat, lng, location });
-        setCoords({ lat, lng, location });
-        const result = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m`
-        );
-        const json = await result.json();
-        const temperature = {
-          value: json.current.temperature_2m as number,
-          units: json.current_units.temperature_2m as string,
-        };
-        const wind_speed = {
-          value: json.current.wind_speed_10m as number,
-          units: json.current_units.wind_speed_10m as string,
-        };
-        setMarker({ lat, lng, location, temperature, wind_speed });
-        return json;
+      ExtractorToNeo4jToolDefinition,
+      async ({ arxivUrl }: { [key: string]: any }) => {
+        const text = await extractTextToNeo4j(arxivUrl);
+        return { ok: true, text };
+      }
+    );
+    // client.addTool(
+    //   KeyConceptResolutionToolDefinition,
+    //   async ({ }) => {
+    //     const text = await resolveKeyConcepts();
+    //     return { ok: true, text };
+    //   }
+    // );
+    client.addTool(
+      TextFromRelatedKeyConceptsToolDefinition,
+      async ({ keyConcept }: { [key: string]: any }) => {
+        const text = await getTextFromRelatedKeyConcept(keyConcept);
+        return { ok: true, text };
+      }
+    );
+    // client.addTool(
+    //   TextFromKeyConceptsToolDefinition,
+    //   async ({ keyConcepts }: { keyConcepts: string[] }) => {
+    //     const text = await getTextFromKeyConcept(keyConcepts);
+    //     return { ok: true, text };
+    //   }
+    // );
+    client.addTool(
+      TextFromEmbeddingToolDefinition,
+      async ({ query }: { [key: string]: any }) => {
+        const text = await getTextFromEmbedding(query);
+        return { ok: true, text };
+      }
+    );
+    client.addTool(
+      AdditionalTextFromKeyConceptToolDefinition,
+      async ({ keyConcept }: { [key: string]: any }) => {
+        const text = await getAdditionalTextFromChunks(keyConcept);
+        return { ok: true, text };
       }
     );
 
-    // handle realtime events from client + server for event logging
+    // Handle realtime events from client + server for event logging
     client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
       setRealtimeEvents((realtimeEvents) => {
         const lastEvent = realtimeEvents[realtimeEvents.length - 1];
         if (lastEvent?.event.type === realtimeEvent.event.type) {
-          // if we receive multiple events in a row, aggregate them for display purposes
+          // If we receive multiple events in a row, aggregate them for display purposes
           lastEvent.count = (lastEvent.count || 0) + 1;
           return realtimeEvents.slice(0, -1).concat(lastEvent);
         } else {
@@ -489,13 +540,28 @@ export function ConsolePage() {
         );
         item.formatted.file = wavFile;
       }
+      if (delta?.function_output) {
+        const functionOutputItem: any = {
+          id: `function-output-${item.id}`,
+          type: 'function_output',
+          role: 'assistant',
+          formatted: {
+            text: delta.function_output.text,
+            function: {
+              name: delta.function_output.name,
+              output: delta.function_output.arguments,
+            },
+          },
+        };
+        items.push(functionOutputItem);
+      }
       setItems(items);
     });
 
     setItems(client.conversation.getItems());
 
     return () => {
-      // cleanup; resets to defaults
+      // Cleanup; resets to defaults
       client.reset();
     };
   }, []);
@@ -553,7 +619,7 @@ export function ConsolePage() {
                       <div
                         className="event-summary"
                         onClick={() => {
-                          // toggle event details
+                          // Toggle event details
                           const id = event.event_id;
                           const expanded = { ...expandedEvents };
                           if (expanded[id]) {
@@ -621,11 +687,11 @@ export function ConsolePage() {
                       </div>
                     </div>
                     <div className={`speaker-content`}>
-                      {/* tool response */}
+                      {/* Tool response */}
                       {conversationItem.type === 'function_call_output' && (
                         <div>{conversationItem.formatted.output}</div>
                       )}
-                      {/* tool call */}
+                      {/* Tool call */}
                       {!!conversationItem.formatted.tool && (
                         <div>
                           {conversationItem.formatted.tool.name}(
@@ -650,12 +716,13 @@ export function ConsolePage() {
                               '(truncated)'}
                           </div>
                         )}
-                      {conversationItem.formatted.file && (
-                        <audio
-                          src={conversationItem.formatted.file.url}
-                          controls
-                        />
-                      )}
+                      {conversationItem.formatted.file &&
+                        outputMode === 'conversation' && (
+                          <audio
+                            src={conversationItem.formatted.file.url}
+                            controls
+                          />
+                        )}
                     </div>
                   </div>
                 );
@@ -665,7 +732,15 @@ export function ConsolePage() {
           <div className="content-actions">
             <Toggle
               defaultValue={false}
-              labels={['manual', 'vad']}
+              labels={['text', 'conversation']}
+              values={['text', 'conversation']}
+              onChange={(_, value) =>
+                handleOutputModeChange(value as 'text' | 'conversation')
+              }
+            />
+            <Toggle
+              defaultValue={false}
+              labels={['manual', 'voice activity detection']}
               values={['none', 'server_vad']}
               onChange={(_, value) => changeTurnEndType(value)}
             />
@@ -689,35 +764,24 @@ export function ConsolePage() {
                 isConnected ? disconnectConversation : connectConversation
               }
             />
+            <form onSubmit={handleTextSubmit} className="text-input-form">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Type your message here..."
+                disabled={!isConnected}
+              />
+              <Button
+                label="Send"
+                buttonStyle="action"
+                type="submit"
+                disabled={!isConnected || inputText.trim() === ''}
+              />
+            </form>
           </div>
         </div>
         <div className="content-right">
-          <div className="content-block map">
-            <div className="content-block-title">get_weather()</div>
-            <div className="content-block-title bottom">
-              {marker?.location || 'not yet retrieved'}
-              {!!marker?.temperature && (
-                <>
-                  <br />
-                  🌡️ {marker.temperature.value} {marker.temperature.units}
-                </>
-              )}
-              {!!marker?.wind_speed && (
-                <>
-                  {' '}
-                  🍃 {marker.wind_speed.value} {marker.wind_speed.units}
-                </>
-              )}
-            </div>
-            <div className="content-block-body full">
-              {coords && (
-                <Map
-                  center={[coords.lat, coords.lng]}
-                  location={coords.location}
-                />
-              )}
-            </div>
-          </div>
           <div className="content-block kv">
             <div className="content-block-title">set_memory()</div>
             <div className="content-block-body content-kv">
