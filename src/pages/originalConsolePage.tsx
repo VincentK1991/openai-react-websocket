@@ -11,8 +11,8 @@
  *
  * this way you can hide the API key and don't need to set dangerouslyAllowAPIKeyInBrowser: true
  */
-const LOCAL_RELAY_SERVER_URL: string =
-  process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
+const LOCAL_RELAY_SERVER_URL: string = '';
+  //process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 
@@ -97,7 +97,7 @@ export function OriginalConsolePage() {
         ? { url: LOCAL_RELAY_SERVER_URL }
         : {
             apiKey: apiKey,
-            //dangerouslyAllowAPIKeyInBrowser: true,
+            dangerouslyAllowAPIKeyInBrowser: true,
           }
     )
   );
@@ -470,13 +470,6 @@ export function OriginalConsolePage() {
         return { ok: true, text };
       }
     );
-    // client.addTool(
-    //   KeyConceptResolutionToolDefinition,
-    //   async ({ }) => {
-    //     const text = await resolveKeyConcepts();
-    //     return { ok: true, text };
-    //   }
-    // );
     client.addTool(
       TextFromRelatedKeyConceptsToolDefinition,
       async ({ keyConcept }: { [key: string]: any }) => {
@@ -484,13 +477,6 @@ export function OriginalConsolePage() {
         return { ok: true, text };
       }
     );
-    // client.addTool(
-    //   TextFromKeyConceptsToolDefinition,
-    //   async ({ keyConcepts }: { keyConcepts: string[] }) => {
-    //     const text = await getTextFromKeyConcept(keyConcepts);
-    //     return { ok: true, text };
-    //   }
-    // );
     client.addTool(
       TextFromEmbeddingToolDefinition,
       async ({ query }: { [key: string]: any }) => {
@@ -540,21 +526,21 @@ export function OriginalConsolePage() {
         );
         item.formatted.file = wavFile;
       }
-      if (delta?.function_output) {
-        const functionOutputItem: any = {
-          id: `function-output-${item.id}`,
-          type: 'function_output',
-          role: 'assistant',
-          formatted: {
-            text: delta.function_output.text,
-            function: {
-              name: delta.function_output.name,
-              output: delta.function_output.arguments,
-            },
-          },
-        };
-        items.push(functionOutputItem);
-      }
+    //   if (delta?.function_output) {
+    //     const functionOutputItem: any = {
+    //       id: `function-output-${item.id}`,
+    //       type: 'function_output',
+    //       role: 'assistant',
+    //       formatted: {
+    //         text: delta.function_output.text,
+    //         function: {
+    //           name: delta.function_output.name,
+    //           output: delta.function_output.arguments,
+    //         },
+    //       },
+    //     };
+    //     items.push(functionOutputItem);
+    //   }
       setItems(items);
     });
 
