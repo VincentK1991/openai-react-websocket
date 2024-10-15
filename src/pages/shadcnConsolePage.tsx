@@ -8,21 +8,19 @@ import {
   TabsContent,
 } from 'src/components/tabs/Tabs';
 import { Switch } from 'src/components/switch/Switch';
+import { Input } from 'src/components/input/Input';
 import {
-  ChatContainer,
-  MessageList,
-  Message,
-  MessageInput,
   Avatar,
-} from '@chatscope/chat-ui-kit-react';
+  AvatarImage,
+  AvatarFallback,
+} from 'src/components/avatar/Avatar';
 
 import { ArrowUp, ArrowDown } from 'react-feather';
 import { WavRenderer } from '../utils/wav_renderer';
 
 import { useRealtimeClient } from 'src/hooks/useRealtimeClient';
-import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
-
-export function ChatScopeConsolePage() {
+import './shadcnConsolePage.css';
+export function ShadcnConsolePage() {
   const {
     connection,
     conversation,
@@ -145,10 +143,16 @@ export function ChatScopeConsolePage() {
 
   return (
     <div data-component="ConsolePage">
-      <div className="content-top">
-        <div className="content-title">
-          <img src="/openai-logomark.svg" alt="Logo" width="24" height="24" />
-          <span>Realtime Console</span>
+      <div className="content-top flex justify-between items-center p-4">
+        <div className="content-title flex items-center">
+          <img
+            src="/openai-logomark.svg"
+            alt="Logo"
+            width="24"
+            height="24"
+            className="mr-2"
+          />
+          <span className="text-xl font-semibold">Realtime Console</span>
         </div>
         <div className="content-api-key">
           {!process.env.REACT_APP_LOCAL_RELAY_SERVER_URL && (
@@ -158,95 +162,111 @@ export function ChatScopeConsolePage() {
           )}
         </div>
       </div>
-      <div className="content-main">
+      <div className="content-main p-4">
         <Tabs defaultValue="conversation" className="space-y-2">
           <TabsList className="bg-gray-100 rounded-md p-2">
-            <TabsTrigger value="conversation" 
-            className="chat-tab">
+            <TabsTrigger value="conversation" className="chat-tab">
               Conversation
             </TabsTrigger>
-            <TabsTrigger value="events" 
-            className="chat-tab">
+            <TabsTrigger value="events" className="chat-tab">
               Events
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="conversation">
             {/* Conversation UI */}
-            <ChatContainer>
-              <MessageList>
+            <div className="chat-container flex flex-col h-full">
+              <div
+                className="message-list flex-grow overflow-y-auto p-2"
+                data-conversation-content
+              >
                 {conversation.items.map((conversationItem) => {
                   const isUser = conversationItem.role === 'user';
                   const messageType = conversationItem.type;
                   const avatarSrc = isUser
-                    ? '/user-avatar.png'
-                    : '/assistant-avatar.png';
-
-                  // Color-code messages based on type
-                  let backgroundColor = '#FFFFFF'; // Default color
-                  if (messageType === 'function_call') {
-                    backgroundColor = '#E0F7FA'; // Light cyan for function calls
-                  } else if (messageType === 'function_call_output') {
-                    backgroundColor = '#FFF3E0'; // Light orange for function outputs
-                  } else if (isUser) {
-                    backgroundColor = '#DCF8C6'; // Light green for user messages
-                  }
+                    ? '/genghis.png'
+                    : '/dreyfus.png';
 
                   return (
-                    <Message
+                    <div
                       key={conversationItem.id}
-                      model={{
-                        message:
-                          conversationItem.formatted.text ||
-                          conversationItem.formatted.transcript ||
-                          '(No content)',
-                        //sentTime: utils.formatTime(new Date()),
-                        sender: isUser ? 'User' : 'Assistant',
-                        direction: isUser ? 'outgoing' : 'incoming',
-                        position: 'normal',
-                      }}
-                      style={{ backgroundColor }}
+                      className={`message flex items-start mb-4 ${
+                        isUser ? 'justify-end' : 'justify-start'
+                      }`}
                     >
-                      <Avatar
-                        src={avatarSrc}
-                        name={isUser ? 'User' : 'Assistant'}
-                      />
-                    </Message>
+                      {!isUser && (
+                        <Avatar className="mr-2">
+                          <AvatarImage src={avatarSrc} alt="Assistant" />
+                          <AvatarFallback>A</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div
+                        className={`message-content max-w-xs md:max-w-md lg:max-w-lg p-2 rounded-lg ${
+                          messageType === 'function_call' ? 'bg-green-300 text-black' :
+                          messageType === 'function_call_output' ? 'bg-orange-300 text-black' :
+                          isUser ? 'bg-blue-400 text-white' : 'bg-pink-300 text-black'
+                        }`}
+                      >
+                        {conversationItem.formatted.text ||
+                          conversationItem.formatted.transcript ||
+                          (conversationItem.formatted.output && conversationItem.formatted.output) ||
+                          (conversationItem.formatted.tool && conversationItem.formatted.tool.name + ': ' + conversationItem.formatted.tool.arguments) ||
+                          '(No content)'}
+                      </div>
+                      {isUser && (
+                        <Avatar className="ml-2">
+                          <AvatarImage src={avatarSrc} alt="User" />
+                          <AvatarFallback>U</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
                   );
                 })}
-              </MessageList>
-              <MessageInput
-                placeholder="Type your message here..."
-                value={textInput.value}
-                onChange={(val) => textInput.setValue(val)}
-                onSend={(message) => {
-                  textInput.setValue(message);
-                  // Create a synthetic event
-                  const syntheticEvent = {
-                    preventDefault: () => {},
-                    target: { value: message },
-                  } as unknown as React.FormEvent<HTMLFormElement>;
-                  textInput.handleSubmit(syntheticEvent);
-                }}
-                disabled={!connection.isConnected}
-                attachButton={false}
-              />
-            </ChatContainer>
+              </div>
+              <div className="message-input-container flex items-center mt-4">
+                <Input
+                  placeholder="Type your message here..."
+                  value={textInput.value}
+                  onChange={(e) => textInput.setValue(e.target.value)}
+                  disabled={!connection.isConnected}
+                  className="flex-grow mr-2"
+                />
+                <Button
+                  onClick={() => {
+                    const message = textInput.value;
+                    textInput.setValue('');
+                    // Create a synthetic event
+                    const syntheticEvent = {
+                      preventDefault: () => {},
+                      target: { value: message },
+                    } as unknown as React.FormEvent<HTMLFormElement>;
+                    textInput.handleSubmit(syntheticEvent);
+                  }}
+                  disabled={!connection.isConnected}
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="events">
             {/* Events Visualization */}
-            <div className="visualization">
-              <div className="visualization-entry client">
+            <div className="visualization flex mt-4">
+              <div className="visualization-entry client flex-1">
                 <canvas ref={clientCanvasRef} />
               </div>
-              <div className="visualization-entry server">
+              <div className="visualization-entry server flex-1">
                 <canvas ref={serverCanvasRef} />
               </div>
             </div>
 
             {/* Events List */}
-            <div className="events-list" ref={eventsScrollRef}>
+            <div
+              className="events-list overflow-y-auto mt-4"
+              ref={eventsScrollRef}
+              style={{ maxHeight: '400px' }}
+            >
               {!conversation.realtimeEvents.length && `Awaiting connection...`}
               {conversation.realtimeEvents.map((realtimeEvent, i) => {
                 const count = realtimeEvent.count;
@@ -257,13 +277,13 @@ export function ChatScopeConsolePage() {
                   event.delta = `[trimmed: ${event.delta.length} bytes]`;
                 }
                 return (
-                  <div className="event" key={event.event_id}>
-                    <div className="event-timestamp">
+                  <div className="event border-b py-2" key={event.event_id}>
+                    <div className="event-timestamp text-gray-500 text-sm">
                       {utils.formatTime(realtimeEvent.time)}
                     </div>
                     <div className="event-details">
                       <div
-                        className="event-summary"
+                        className="event-summary flex items-center cursor-pointer"
                         onClick={() => {
                           // Toggle event details
                           const id = event.event_id;
@@ -274,10 +294,12 @@ export function ChatScopeConsolePage() {
                         }}
                       >
                         <div
-                          className={`event-source ${
+                          className={`event-source flex items-center mr-2 ${
                             event.type === 'error'
-                              ? 'error'
-                              : realtimeEvent.source
+                              ? 'text-red-500'
+                              : realtimeEvent.source === 'client'
+                              ? 'text-blue-500'
+                              : 'text-green-500'
                           }`}
                         >
                           {realtimeEvent.source === 'client' ? (
@@ -285,20 +307,20 @@ export function ChatScopeConsolePage() {
                           ) : (
                             <ArrowDown />
                           )}
-                          <span>
+                          <span className="ml-1">
                             {event.type === 'error'
                               ? 'error!'
                               : realtimeEvent.source}
                           </span>
                         </div>
-                        <div className="event-type">
+                        <div className="event-type font-medium">
                           {event.type}
                           {count && ` (${count})`}
                         </div>
                       </div>
                       {!!expandedEvents[event.event_id] && (
-                        <div className="event-payload">
-                          {JSON.stringify(event, null, 2)}
+                        <div className="event-payload mt-2 text-sm text-gray-700">
+                          <pre>{JSON.stringify(event, null, 2)}</pre>
                         </div>
                       )}
                     </div>
@@ -310,32 +332,43 @@ export function ChatScopeConsolePage() {
         </Tabs>
 
         {/* Actions Section */}
-        <div className="content-actions">
-          <Switch
-            id="conversation-mode"
-            checked={output.mode === 'conversation'}
-            onCheckedChange={(checked) =>
-              output.setMode(checked ? 'conversation' : 'text')
-            }
-            className="chat-switch w-160 h-80"
-          >
-            <span className="text-xs text-white">{output.mode === 'conversation' ? 'Conversation' : 'Text'}</span>
-          </Switch>
-          {/* <Label htmlFor="conversation-mode">Conversation Mode</Label> */}
+        <div className="content-actions flex items-center space-x-4 mt-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="conversation-mode"
+              checked={output.mode === 'conversation'}
+              onCheckedChange={(checked) =>
+                output.setMode(checked ? 'conversation' : 'text')
+              }
+              className="w-32 h-8"
+              labelOn="conversation"
+              labelOff="text"
+              >
+              {/* <span className="ml-2">Mode</span> */}
+            </Switch>
+            {/* <Label htmlFor="conversation-mode">
+              {output.mode === 'conversation'
+                ? 'Conversation Mode'
+                : 'Text Mode'}
+            </Label> */}
+          </div>
 
-          <Switch
-            id="push-to-talk"
-            checked={audio.canPushToTalk}
-            onCheckedChange={(checked) =>
-              audio.changeTurnEndType(checked ? 'none' : 'server_vad')
-            }
-            className="chat-switch w-16 h-8"
-          >
-            <span className="text-xs text-white">
-              {audio.canPushToTalk ? 'Manual' : 'Voice Activity Detection'}
-            </span>
-          </Switch>
-          {/* <Label htmlFor="push-to-talk">Push to Talk</Label> */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="push-to-talk"
+              checked={audio.canPushToTalk}
+              onCheckedChange={(checked) =>
+                audio.changeTurnEndType(checked ? 'none' : 'server_vad')
+              }
+              className="w-32 h-8"
+              labelOn="manual"
+              labelOff="VAD"
+            />
+              {/* <Label htmlFor="push-to-talk">
+                {audio.canPushToTalk ? 'Manual' : 'Voice Activity Detection'}
+              </Label> */}
+          </div>
+
           <Button
             onMouseDown={audio.startRecording}
             onMouseUp={audio.stopRecording}
@@ -357,11 +390,13 @@ export function ChatScopeConsolePage() {
       </div>
 
       {/* Memory Key-Value Section */}
-      <div className="content-right">
-        <div className="content-block kv">
-          <div className="content-block-title">set_memory()</div>
+      <div className="content-right p-4">
+        <div className="content-block kv bg-white shadow rounded-md p-4">
+          <div className="content-block-title text-lg font-semibold mb-2">
+            set_memory()
+          </div>
           <div className="content-block-body content-kv">
-            {JSON.stringify(conversation.memoryKv, null, 2)}
+            <pre>{JSON.stringify(conversation.memoryKv, null, 2)}</pre>
           </div>
         </div>
       </div>

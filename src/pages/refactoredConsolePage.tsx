@@ -6,7 +6,7 @@ import { WavRenderer } from '../utils/wav_renderer';
 import { useRealtimeClient } from '../hooks/useRealtimeClient';
 import './ConsolePage.scss';
 
-export function ConsolePage() {
+export function RefactoredConsolePage() {
   const {
     connection,
     conversation,
@@ -329,7 +329,7 @@ export function ConsolePage() {
                   : connection.connect
               }
             />
-            <form onSubmit={textInput.handleSubmit} className="text-input-form">
+            <form onSubmit={textInput.handleSubmit} className="text-input-form flex w-full">
               <input
                 type="text"
                 value={textInput.value}
