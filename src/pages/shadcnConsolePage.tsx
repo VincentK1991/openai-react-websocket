@@ -17,7 +17,7 @@ import {
 
 import { ArrowUp, ArrowDown } from 'react-feather';
 import { WavRenderer } from '../utils/wav_renderer';
-import { renderBarChart, barChartData } from 'src/components/chart/renderChart';
+import { renderChart, barChartData, scatterPlotChartData } from 'src/components/chart/renderChart';
 import { useRealtimeClient } from 'src/hooks/useRealtimeClient';
 import './shadcnConsolePage.css';
 export function ShadcnConsolePage() {
@@ -397,7 +397,8 @@ export function ShadcnConsolePage() {
           </TabsContent>
           <TabsContent value="chart">
             {/* Chart UI */}
-            {renderBarChart(barChartData)}
+            {renderChart(barChartData)}
+            {renderChart(scatterPlotChartData)}
           </TabsContent>
         </Tabs>
       </div>
