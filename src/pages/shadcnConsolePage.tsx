@@ -17,7 +17,7 @@ import {
 
 import { ArrowUp, ArrowDown } from 'react-feather';
 import { WavRenderer } from '../utils/wav_renderer';
-import { renderChart } from 'src/components/chart/renderChart';
+import { renderBarChart, barChartData } from 'src/components/chart/renderChart';
 import { useRealtimeClient } from 'src/hooks/useRealtimeClient';
 import './shadcnConsolePage.css';
 export function ShadcnConsolePage() {
@@ -268,19 +268,19 @@ export function ShadcnConsolePage() {
                   Send
                 </Button>
               </div>
-          <div className="content-actions flex items-center space-x-4 mt-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="conversation-mode"
-                checked={output.mode === 'conversation'}
-                onCheckedChange={(checked) =>
-                  output.setMode(checked ? 'conversation' : 'text')
-                }
-                className="w-32 h-8"
-                labelOn="conversation"
-                labelOff="text"
-              />
-            </div>
+              <div className="content-actions flex items-center space-x-4 mt-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="conversation-mode"
+                    checked={output.mode === 'conversation'}
+                    onCheckedChange={(checked) =>
+                      output.setMode(checked ? 'conversation' : 'text')
+                    }
+                    className="w-32 h-8"
+                    labelOn="conversation"
+                    labelOff="text"
+                  />
+                </div>
 
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -299,7 +299,7 @@ export function ShadcnConsolePage() {
                   onMouseDown={audio.startRecording}
                   onMouseUp={audio.stopRecording}
                   disabled={!connection.isConnected || !audio.canPushToTalk}
-                  >
+                >
                   {audio.isRecording ? 'Release to Send' : 'Push to Talk'}
                 </Button>
 
@@ -309,7 +309,7 @@ export function ShadcnConsolePage() {
                       ? connection.disconnect
                       : connection.connect
                   }
-                  >
+                >
                   {connection.isConnected ? 'Disconnect' : 'Connect'}
                 </Button>
               </div>
@@ -397,7 +397,7 @@ export function ShadcnConsolePage() {
           </TabsContent>
           <TabsContent value="chart">
             {/* Chart UI */}
-            {renderChart()}
+            {renderBarChart(barChartData)}
           </TabsContent>
         </Tabs>
       </div>
