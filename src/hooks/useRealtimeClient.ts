@@ -20,8 +20,7 @@ import {
   AdditionalTextFromKeyConceptToolDefinition,
 } from '../Tools/additionalTextFromChunks';
 
-const LOCAL_RELAY_SERVER_URL: string =
-  process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
+const LOCAL_RELAY_SERVER_URL: string = '' //process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
 
 interface RealtimeEvent {
   time: string;
@@ -64,6 +63,7 @@ export function useRealtimeClient() {
         ? { url: LOCAL_RELAY_SERVER_URL }
         : {
             apiKey: apiKey,
+            dangerouslyAllowAPIKeyInBrowser: true,
           }
     )
   );

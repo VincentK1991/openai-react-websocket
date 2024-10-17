@@ -17,7 +17,7 @@ import {
 
 import { ArrowUp, ArrowDown } from 'react-feather';
 import { WavRenderer } from '../utils/wav_renderer';
-
+import { renderChart } from 'src/components/chart/renderChart';
 import { useRealtimeClient } from 'src/hooks/useRealtimeClient';
 import './shadcnConsolePage.css';
 export function ShadcnConsolePage() {
@@ -171,6 +171,9 @@ export function ShadcnConsolePage() {
             <TabsTrigger value="events" className="chat-tab">
               Events
             </TabsTrigger>
+            <TabsTrigger value="chart" className="chat-tab">
+              Chart
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="conversation">
@@ -183,9 +186,7 @@ export function ShadcnConsolePage() {
                 {conversation.items.map((conversationItem) => {
                   const isUser = conversationItem.role === 'user';
                   const messageType = conversationItem.type;
-                  const avatarSrc = isUser
-                    ? '/genghis.png'
-                    : '/dreyfus.png';
+                  const avatarSrc = isUser ? '/genghis.png' : '/dreyfus.png';
 
                   return (
                     <div
@@ -202,15 +203,23 @@ export function ShadcnConsolePage() {
                       )}
                       <div
                         className={`message-content max-w-xs md:max-w-md lg:max-w-lg p-2 rounded-lg ${
-                          messageType === 'function_call' ? 'bg-green-300 text-black' :
-                          messageType === 'function_call_output' ? 'bg-orange-300 text-black' :
-                          isUser ? 'bg-blue-400 text-white' : 'bg-pink-300 text-black'
+                          messageType === 'function_call'
+                            ? 'bg-green-300 text-black'
+                            : messageType === 'function_call_output'
+                            ? 'bg-orange-300 text-black'
+                            : isUser
+                            ? 'bg-blue-400 text-white'
+                            : 'bg-pink-300 text-black'
                         }`}
                       >
                         {conversationItem.formatted.text ||
                           conversationItem.formatted.transcript ||
-                          (conversationItem.formatted.output && conversationItem.formatted.output) ||
-                          (conversationItem.formatted.tool && conversationItem.formatted.tool.name + ': ' + conversationItem.formatted.tool.arguments) ||
+                          (conversationItem.formatted.output &&
+                            conversationItem.formatted.output) ||
+                          (conversationItem.formatted.tool &&
+                            conversationItem.formatted.tool.name +
+                              ': ' +
+                              conversationItem.formatted.tool.arguments) ||
                           '(No content)'}
                       </div>
                       {isUser && (
@@ -228,6 +237,18 @@ export function ShadcnConsolePage() {
                   placeholder="Type your message here..."
                   value={textInput.value}
                   onChange={(e) => textInput.setValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const message = textInput.value;
+                      textInput.setValue('');
+                      // Create a synthetic event
+                      const syntheticEvent = {
+                        preventDefault: () => {},
+                        target: { value: message },
+                      } as unknown as React.FormEvent<HTMLFormElement>;
+                      textInput.handleSubmit(syntheticEvent);
+                    }
+                  }}
                   disabled={!connection.isConnected}
                   className="flex-grow mr-2"
                 />
@@ -245,6 +266,51 @@ export function ShadcnConsolePage() {
                   disabled={!connection.isConnected}
                 >
                   Send
+                </Button>
+              </div>
+          <div className="content-actions flex items-center space-x-4 mt-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="conversation-mode"
+                checked={output.mode === 'conversation'}
+                onCheckedChange={(checked) =>
+                  output.setMode(checked ? 'conversation' : 'text')
+                }
+                className="w-32 h-8"
+                labelOn="conversation"
+                labelOff="text"
+              />
+            </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="push-to-talk"
+                    checked={audio.canPushToTalk}
+                    onCheckedChange={(checked) =>
+                      audio.changeTurnEndType(checked ? 'none' : 'server_vad')
+                    }
+                    className="w-32 h-8"
+                    labelOn="manual"
+                    labelOff="VAD"
+                  />
+                </div>
+
+                <Button
+                  onMouseDown={audio.startRecording}
+                  onMouseUp={audio.stopRecording}
+                  disabled={!connection.isConnected || !audio.canPushToTalk}
+                  >
+                  {audio.isRecording ? 'Release to Send' : 'Push to Talk'}
+                </Button>
+
+                <Button
+                  onClick={
+                    connection.isConnected
+                      ? connection.disconnect
+                      : connection.connect
+                  }
+                  >
+                  {connection.isConnected ? 'Disconnect' : 'Connect'}
                 </Button>
               </div>
             </div>
@@ -265,7 +331,7 @@ export function ShadcnConsolePage() {
             <div
               className="events-list overflow-y-auto mt-4"
               ref={eventsScrollRef}
-              style={{ maxHeight: '400px' }}
+              style={{ maxHeight: '60%' }}
             >
               {!conversation.realtimeEvents.length && `Awaiting connection...`}
               {conversation.realtimeEvents.map((realtimeEvent, i) => {
@@ -329,76 +395,11 @@ export function ShadcnConsolePage() {
               })}
             </div>
           </TabsContent>
+          <TabsContent value="chart">
+            {/* Chart UI */}
+            {renderChart()}
+          </TabsContent>
         </Tabs>
-
-        {/* Actions Section */}
-        <div className="content-actions flex items-center space-x-4 mt-4">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="conversation-mode"
-              checked={output.mode === 'conversation'}
-              onCheckedChange={(checked) =>
-                output.setMode(checked ? 'conversation' : 'text')
-              }
-              className="w-32 h-8"
-              labelOn="conversation"
-              labelOff="text"
-              >
-              {/* <span className="ml-2">Mode</span> */}
-            </Switch>
-            {/* <Label htmlFor="conversation-mode">
-              {output.mode === 'conversation'
-                ? 'Conversation Mode'
-                : 'Text Mode'}
-            </Label> */}
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="push-to-talk"
-              checked={audio.canPushToTalk}
-              onCheckedChange={(checked) =>
-                audio.changeTurnEndType(checked ? 'none' : 'server_vad')
-              }
-              className="w-32 h-8"
-              labelOn="manual"
-              labelOff="VAD"
-            />
-              {/* <Label htmlFor="push-to-talk">
-                {audio.canPushToTalk ? 'Manual' : 'Voice Activity Detection'}
-              </Label> */}
-          </div>
-
-          <Button
-            onMouseDown={audio.startRecording}
-            onMouseUp={audio.stopRecording}
-            disabled={!connection.isConnected || !audio.canPushToTalk}
-          >
-            {audio.isRecording ? 'Release to Send' : 'Push to Talk'}
-          </Button>
-
-          <Button
-            onClick={
-              connection.isConnected
-                ? connection.disconnect
-                : connection.connect
-            }
-          >
-            {connection.isConnected ? 'Disconnect' : 'Connect'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Memory Key-Value Section */}
-      <div className="content-right p-4">
-        <div className="content-block kv bg-white shadow rounded-md p-4">
-          <div className="content-block-title text-lg font-semibold mb-2">
-            set_memory()
-          </div>
-          <div className="content-block-body content-kv">
-            <pre>{JSON.stringify(conversation.memoryKv, null, 2)}</pre>
-          </div>
-        </div>
       </div>
     </div>
   );
