@@ -3,6 +3,9 @@ import { RealtimeClient } from '@openai/realtime-api-beta';
 import { WavRecorder, WavStreamPlayer } from '../lib/wavtools/index';
 import { instructions } from '../utils/conversation_config';
 import { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
+import { useMongoSave } from './useMongoSave';
+import { v4 as uuidv4 } from 'uuid';
+
 import {
   extractTextToNeo4j,
   ExtractorToNeo4jToolDefinition,
@@ -20,7 +23,7 @@ import {
   AdditionalTextFromKeyConceptToolDefinition,
 } from '../Tools/additionalTextFromChunks';
 
-const LOCAL_RELAY_SERVER_URL: string = '' //process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
+const LOCAL_RELAY_SERVER_URL: string = ''; //process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
 
 interface RealtimeEvent {
   time: string;
@@ -32,6 +35,8 @@ interface RealtimeEvent {
 export function useRealtimeClient() {
   // ... (keep state variables and refs)
   const [isConnected, setIsConnected] = useState(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const { saveToMongo } = useMongoSave();
   const wavRecorderRef = useRef<WavRecorder>(
     new WavRecorder({ sampleRate: 24000 })
   );
@@ -67,13 +72,14 @@ export function useRealtimeClient() {
           }
     )
   );
+
   const connection = {
     isConnected,
     connect: useCallback(async () => {
       const client = clientRef.current;
       const wavRecorder = wavRecorderRef.current;
       const wavStreamPlayer = wavStreamPlayerRef.current;
-
+      sessionIdRef.current = uuidv4();
       // Set modalities before connecting
       const modalities = outputMode === 'text' ? ['text'] : ['text', 'audio'];
       await client.updateSession({ modalities });
@@ -121,6 +127,7 @@ export function useRealtimeClient() {
 
       const wavStreamPlayer = wavStreamPlayerRef.current;
       await wavStreamPlayer.interrupt();
+      sessionIdRef.current = null;
     }, []),
   };
 
@@ -238,7 +245,6 @@ export function useRealtimeClient() {
   useEffect(() => {
     const client = clientRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
-
     // Set instructions
     client.updateSession({ instructions: instructions });
     // Set transcription, otherwise we don't get user transcriptions back
@@ -336,20 +342,23 @@ export function useRealtimeClient() {
         );
         item.formatted.file = wavFile;
       }
-      if (delta?.function_output) {
-        const functionOutputItem: any = {
-          id: `function-output-${item.id}`,
-          type: 'function_output',
-          role: 'assistant',
-          formatted: {
-            text: delta.function_output.text,
-            function: {
-              name: delta.function_output.name,
-              output: delta.function_output.arguments,
-            },
-          },
+      try {
+        const interactionType = item.role || (item.formatted?.tool ? 'function' : 'function_call_output');
+        const interactionContent = {
+          text: item.formatted?.text,
+          transcript: item.formatted?.transcript,
+          tool: item.formatted?.tool,
+          output: item.formatted?.output
         };
-        items.push(functionOutputItem);
+
+        await saveToMongo({
+          sessionId: sessionIdRef.current,
+          timestamp: new Date().toISOString(),
+          type: interactionType,
+          content: interactionContent,
+        });
+      } catch (error) {
+        console.error('Failed to save conversation item:', error);
       }
       setItems(items);
     });

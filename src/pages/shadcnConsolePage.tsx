@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from 'src/components/button/Button';
 import { Label } from 'src/components/label/Label';
+import { ConversationTab } from 'src/components/prop/ConversationTab';
+import { EventTab } from 'src/components/prop/EventTab';
 import {
   Tabs,
   TabsList,
@@ -178,222 +180,34 @@ export function ShadcnConsolePage() {
 
           <TabsContent value="conversation">
             {/* Conversation UI */}
-            <div className="chat-container flex flex-col h-full">
-              <div
-                className="message-list flex-grow overflow-y-auto p-2"
-                data-conversation-content
-              >
-                {conversation.items.map((conversationItem) => {
-                  const isUser = conversationItem.role === 'user';
-                  const messageType = conversationItem.type;
-                  const avatarSrc = isUser ? '/genghis.png' : '/dreyfus.png';
-
-                  return (
-                    <div
-                      key={conversationItem.id}
-                      className={`message flex items-start mb-4 ${
-                        isUser ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {!isUser && (
-                        <Avatar className="mr-2">
-                          <AvatarImage src={avatarSrc} alt="Assistant" />
-                          <AvatarFallback>A</AvatarFallback>
-                        </Avatar>
-                      )}
-                      <div
-                        className={`message-content max-w-xs md:max-w-md lg:max-w-lg p-2 rounded-lg ${
-                          messageType === 'function_call'
-                            ? 'bg-green-300 text-black'
-                            : messageType === 'function_call_output'
-                            ? 'bg-orange-300 text-black'
-                            : isUser
-                            ? 'bg-blue-400 text-white'
-                            : 'bg-pink-300 text-black'
-                        }`}
-                      >
-                        {conversationItem.formatted.text ||
-                          conversationItem.formatted.transcript ||
-                          (conversationItem.formatted.output &&
-                            conversationItem.formatted.output) ||
-                          (conversationItem.formatted.tool &&
-                            conversationItem.formatted.tool.name +
-                              ': ' +
-                              conversationItem.formatted.tool.arguments) ||
-                          '(No content)'}
-                      </div>
-                      {isUser && (
-                        <Avatar className="ml-2">
-                          <AvatarImage src={avatarSrc} alt="User" />
-                          <AvatarFallback>U</AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="message-input-container flex items-center mt-4">
-                <Input
-                  placeholder="Type your message here..."
-                  value={textInput.value}
-                  onChange={(e) => textInput.setValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const message = textInput.value;
-                      textInput.setValue('');
-                      // Create a synthetic event
-                      const syntheticEvent = {
-                        preventDefault: () => {},
-                        target: { value: message },
-                      } as unknown as React.FormEvent<HTMLFormElement>;
-                      textInput.handleSubmit(syntheticEvent);
-                    }
-                  }}
-                  disabled={!connection.isConnected}
-                  className="flex-grow mr-2"
-                />
-                <Button
-                  onClick={() => {
-                    const message = textInput.value;
-                    textInput.setValue('');
-                    // Create a synthetic event
-                    const syntheticEvent = {
-                      preventDefault: () => {},
-                      target: { value: message },
-                    } as unknown as React.FormEvent<HTMLFormElement>;
-                    textInput.handleSubmit(syntheticEvent);
-                  }}
-                  disabled={!connection.isConnected}
-                >
-                  Send
-                </Button>
-              </div>
-              <div className="content-actions flex items-center space-x-4 mt-4">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="conversation-mode"
-                    checked={output.mode === 'conversation'}
-                    onCheckedChange={(checked) =>
-                      output.setMode(checked ? 'conversation' : 'text')
-                    }
-                    className="w-32 h-8"
-                    labelOn="conversation"
-                    labelOff="text"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="push-to-talk"
-                    checked={audio.canPushToTalk}
-                    onCheckedChange={(checked) =>
-                      audio.changeTurnEndType(checked ? 'none' : 'server_vad')
-                    }
-                    className="w-32 h-8"
-                    labelOn="manual"
-                    labelOff="VAD"
-                  />
-                </div>
-
-                <Button
-                  onMouseDown={audio.startRecording}
-                  onMouseUp={audio.stopRecording}
-                  disabled={!connection.isConnected || !audio.canPushToTalk}
-                >
-                  {audio.isRecording ? 'Release to Send' : 'Push to Talk'}
-                </Button>
-
-                <Button
-                  onClick={
-                    connection.isConnected
-                      ? connection.disconnect
-                      : connection.connect
-                  }
-                >
-                  {connection.isConnected ? 'Disconnect' : 'Connect'}
-                </Button>
-              </div>
-            </div>
+            <ConversationTab
+              conversation={conversation}
+              textInput={textInput}
+              connection={connection}
+              output={output}
+              audio={audio}
+            />
           </TabsContent>
 
           <TabsContent value="events">
             {/* Events Visualization */}
-            <div className="visualization flex mt-4">
-              <div className="visualization-entry client flex-1">
-                <canvas ref={clientCanvasRef} />
-              </div>
-              <div className="visualization-entry server flex-1">
-                <canvas ref={serverCanvasRef} />
-              </div>
-            </div>
-
-            {/* Events List */}
-            <div
-              className="events-list overflow-y-auto mt-4"
-              ref={eventsScrollRef}
-              style={{ maxHeight: '60%' }}
-            >
-              {!conversation.realtimeEvents.length && `Awaiting connection...`}
-              {conversation.realtimeEvents.map((realtimeEvent, i) => {
-                const count = realtimeEvent.count;
-                const event = { ...realtimeEvent.event };
-                if (event.type === 'input_audio_buffer.append') {
-                  event.audio = `[trimmed: ${event.audio.length} bytes]`;
-                } else if (event.type === 'response.audio.delta') {
-                  event.delta = `[trimmed: ${event.delta.length} bytes]`;
-                }
-                return (
-                  <div className="event border-b py-2" key={event.event_id}>
-                    <div className="event-timestamp text-gray-500 text-sm">
-                      {utils.formatTime(realtimeEvent.time)}
-                    </div>
-                    <div className="event-details">
-                      <div
-                        className="event-summary flex items-center cursor-pointer"
-                        onClick={() => {
-                          // Toggle event details
-                          const id = event.event_id;
-                          setExpandedEvents((prev) => ({
-                            ...prev,
-                            [id]: !prev[id],
-                          }));
-                        }}
-                      >
-                        <div
-                          className={`event-source flex items-center mr-2 ${
-                            event.type === 'error'
-                              ? 'text-red-500'
-                              : realtimeEvent.source === 'client'
-                              ? 'text-blue-500'
-                              : 'text-green-500'
-                          }`}
-                        >
-                          {realtimeEvent.source === 'client' ? (
-                            <ArrowUp />
-                          ) : (
-                            <ArrowDown />
-                          )}
-                          <span className="ml-1">
-                            {event.type === 'error'
-                              ? 'error!'
-                              : realtimeEvent.source}
-                          </span>
-                        </div>
-                        <div className="event-type font-medium">
-                          {event.type}
-                          {count && ` (${count})`}
-                        </div>
-                      </div>
-                      {!!expandedEvents[event.event_id] && (
-                        <div className="event-payload mt-2 text-sm text-gray-700">
-                          <pre>{JSON.stringify(event, null, 2)}</pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <EventTab
+              events={{
+                realtimeEvents: conversation.realtimeEvents,
+              }}
+              utils={{
+                formatTime: (time: number) => utils.formatTime(time.toString()),
+              }}
+              visualization={{
+                clientCanvasRef: clientCanvasRef,
+                serverCanvasRef: serverCanvasRef,
+              }}
+              eventList={{
+                eventsScrollRef: eventsScrollRef,
+                expandedEvents: expandedEvents,
+                setExpandedEvents: setExpandedEvents,
+              }}
+            />
           </TabsContent>
           <TabsContent value="chart">
             {/* Chart UI */}
