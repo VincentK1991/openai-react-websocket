@@ -1,50 +1,41 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { AudioVisualizer } from './AudioVisualizer';
 import { ArrowUp, ArrowDown } from 'react-feather';
-import { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
-
 
 interface EventTabProps {
   events: {
     realtimeEvents: any[];
   };
   utils: {
-    formatTime: (time: number) => string;
-  };
-  visualization: {
-    clientCanvasRef: React.RefObject<HTMLCanvasElement>;
-    serverCanvasRef: React.RefObject<HTMLCanvasElement>;
-  };
-  eventList: {
-    eventsScrollRef: React.RefObject<HTMLDivElement>;
-    expandedEvents: { [key: string]: boolean };
-    setExpandedEvents: React.Dispatch<
-      React.SetStateAction<{ [key: string]: boolean }>
-    >;
+    formatTime: (time: string) => string;
   };
 }
 
-export function EventTab({
-  events,
-  utils,
-  visualization,
-  eventList,
-}: EventTabProps) {
+export function EventTab({ events, utils }: EventTabProps) {
+  const eventsScrollRef = useRef<HTMLDivElement>(null);
+  const eventsScrollHeightRef = useRef(0);
+  const [expandedEvents, setExpandedEvents] = useState<{
+    [key: string]: boolean;
+  }>({});
+
+  // Auto-scroll to bottom when new events are added
+  useEffect(() => {
+    if (eventsScrollRef.current) {
+      const eventsEl = eventsScrollRef.current;
+      const scrollHeight = eventsEl.scrollHeight;
+      if (scrollHeight !== eventsScrollHeightRef.current) {
+        eventsEl.scrollTop = scrollHeight;
+        eventsScrollHeightRef.current = scrollHeight;
+      }
+    }
+  }, [events]);
+
   return (
     <div>
-      {/* Events Visualization */}
-      <div className="visualization flex mt-4">
-        <div className="visualization-entry client flex-1">
-          <canvas ref={visualization.clientCanvasRef} />
-        </div>
-        <div className="visualization-entry server flex-1">
-          <canvas ref={visualization.serverCanvasRef} />
-        </div>
-      </div>
-
       {/* Events List */}
       <div
         className="events-list overflow-y-auto mt-4"
-        ref={eventList.eventsScrollRef}
+        ref={eventsScrollRef}
         style={{ maxHeight: '60%' }}
       >
         {!events.realtimeEvents.length && `Awaiting connection...`}
@@ -67,7 +58,7 @@ export function EventTab({
                   onClick={() => {
                     // Toggle event details
                     const id = event.event_id;
-                    eventList.setExpandedEvents((prev) => ({
+                    setExpandedEvents((prev) => ({
                       ...prev,
                       [id]: !prev[id],
                     }));
@@ -96,7 +87,7 @@ export function EventTab({
                     {count && ` (${count})`}
                   </div>
                 </div>
-                {!!eventList.expandedEvents[event.event_id] && (
+                {!!expandedEvents[event.event_id] && (
                   <div className="event-payload mt-2 text-sm text-gray-700">
                     <pre>{JSON.stringify(event, null, 2)}</pre>
                   </div>

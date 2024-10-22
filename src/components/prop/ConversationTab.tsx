@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from 'src/components/button/Button';
 import { Input } from 'src/components/input/Input';
 import { Switch } from 'src/components/switch/Switch';
@@ -44,6 +44,17 @@ export function ConversationTab({
   output,
   audio,
 }: ConversationTabProps) {
+  
+  const conversationRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new conversation items are added
+  useEffect(() => {
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop =
+        conversationRef.current.scrollHeight;
+    }
+  }, [conversation.items]);
+
   return (
     <div className="chat-container flex flex-col h-full">
       <div
@@ -55,6 +66,7 @@ export function ConversationTab({
           const isUser = conversationItem.role === 'user';
           const messageType = conversationItem.type;
           const avatarSrc = isUser ? '/genghis.png' : '/dreyfus.png';
+          const formatted = conversationItem.formatted || {};
 
           return (
             <div
@@ -81,16 +93,12 @@ export function ConversationTab({
                 }`}
               > 
                 {messageType === 'function_call_output' ? (
-                  <FunctionCallOutput content={conversationItem.formatted.output || '(No content)'} />
+                  <FunctionCallOutput content={formatted.output || '(No content)'} />
                 ) : (
-                  conversationItem.formatted.text ||
-                  conversationItem.formatted.transcript ||
-                  (conversationItem.formatted.output &&
-                    conversationItem.formatted.output) ||
-                  (conversationItem.formatted.tool &&
-                    conversationItem.formatted.tool.name +
-                      ': ' +
-                      conversationItem.formatted.tool.arguments) ||
+                  formatted.text ||
+                  formatted.transcript ||
+                  formatted.output ||
+                  (formatted.tool && `${formatted.tool.name}: ${formatted.tool.arguments}`) ||
                   '(No content)'
                 )}
               </div>

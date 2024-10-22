@@ -3,7 +3,7 @@ import { RealtimeClient } from '@openai/realtime-api-beta';
 import { WavRecorder, WavStreamPlayer } from '../lib/wavtools/index';
 import { instructions } from '../utils/conversation_config';
 import { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
-import { useMongoSave } from './useMongoSave';
+//import { useMongoSave } from './useMongoSave';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -36,7 +36,7 @@ export function useRealtimeClient() {
   // ... (keep state variables and refs)
   const [isConnected, setIsConnected] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
-  const { saveToMongo } = useMongoSave();
+  //const { saveToMongo } = useMongoSave();
   const wavRecorderRef = useRef<WavRecorder>(
     new WavRecorder({ sampleRate: 24000 })
   );
@@ -44,9 +44,6 @@ export function useRealtimeClient() {
   const startTimeRef = useRef<string>(new Date().toISOString());
   const [items, setItems] = useState<ItemType[]>([]);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
-  const [expandedEvents, setExpandedEvents] = useState<{
-    [key: string]: boolean;
-  }>({});
   const [canPushToTalk, setCanPushToTalk] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [memoryKv, setMemoryKv] = useState<{ [key: string]: any }>({});
@@ -342,24 +339,24 @@ export function useRealtimeClient() {
         );
         item.formatted.file = wavFile;
       }
-      try {
-        const interactionType = item.role || (item.formatted?.tool ? 'function' : 'function_call_output');
-        const interactionContent = {
-          text: item.formatted?.text,
-          transcript: item.formatted?.transcript,
-          tool: item.formatted?.tool,
-          output: item.formatted?.output
-        };
+      // try {
+      //   const interactionType = item.role || (item.formatted?.tool ? 'function' : 'function_call_output');
+      //   const interactionContent = {
+      //     text: item.formatted?.text,
+      //     transcript: item.formatted?.transcript,
+      //     tool: item.formatted?.tool,
+      //     output: item.formatted?.output
+      //   };
 
-        await saveToMongo({
-          sessionId: sessionIdRef.current,
-          timestamp: new Date().toISOString(),
-          type: interactionType,
-          content: interactionContent,
-        });
-      } catch (error) {
-        console.error('Failed to save conversation item:', error);
-      }
+      //   await saveToMongo({
+      //     sessionId: sessionIdRef.current,
+      //     timestamp: new Date().toISOString(),
+      //     type: interactionType,
+      //     content: interactionContent,
+      //   });
+      // } catch (error) {
+      //    console.error('Failed to save conversation item:', error);
+      // }
       setItems(items);
     });
 
